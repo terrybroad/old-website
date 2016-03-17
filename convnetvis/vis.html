@@ -128,7 +128,7 @@
 		</div>
 			
 			<div id = "classification">MNIST Digit Classification : </div>
-			<div id ="subtext">	Press spacebar for new example.</div>
+			<div id ="subtext">	<a href="javascript:void"id ="clickNew"> Press for new example. </a> </div>
 		</div>
 
 
@@ -608,6 +608,14 @@
 				step_num++;
 				console.log("input - "+y+" prediction - "+net.getPrediction()+"");
 				}
+			}
+
+			var el = document.getElementById('clickNew');
+			el.onclick = clickNewInput;
+
+			function clickNewInput()
+			{
+				visNewDigit = true;
 			}
 
 			function updateVisualisation()
