@@ -1,0 +1,28 @@
+	#info {
+		font-size:15px;
+		text-align:left;
+		color:#cccccc;
+		position: absolute;
+		top: 0px; width: 100%;
+		padding-top:5px;
+		padding-left:5px;
+	}
+	#personalinfo {
+/*		direction: rtl; 
+		float:right;
+		position: relative;*/
+/*		color:#cccccc;
+		top: 0px; width: 100%;
+		padding-top:5px;
+		padding-left: 5px;
+		padding-right: 5px;*/
+	}
+	#classification
+	{
+		padding-top: 0px;
+	}
+	#subtext
+	{
+		color:#4B4B4C;
+		font-size: 12px;
+	}

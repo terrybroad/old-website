@@ -28,17 +28,18 @@
 		padding-left:5px;
 	}
 	#personalinfo {
-		direction: rtl; 
+/*		direction: rtl; 
 		float:right;
-		color:#cccccc;
-		position: absolute;
+		position: relative;*/
+/*		color:#cccccc;
 		top: 0px; width: 100%;
 		padding-top:5px;
-		padding-right: 5px;
+		padding-left: 5px;
+		padding-right: 5px;*/
 	}
 	#classification
 	{
-		padding-top: 3px;
+		padding-top: 0px;
 	}
 	#subtext
 	{
@@ -54,6 +55,8 @@
 		color: #cccccc;
 	}
     </style>
+
+<link rel='stylesheet' media='screen and (min-width: 1px) and (max-width: 550px)' href='mobilestyle.css' />
 
 <script>
   (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
@@ -120,13 +123,14 @@
 		<div id="container"></div>
 		<div id="info">
 			Topological Visualisation of a Convolutional Neural Network
-			<br>
+	    <div id ="personalinfo">
+			Project by <a href="../"> Terence Broad </a> • <a href="../nnvis.html" target="_blank"> More Info </a> 
+		</div>
+			
 			<div id = "classification">MNIST Digit Classification : </div>
 			<div id ="subtext">	Press spacebar for new example.</div>
 		</div>
-		<div id ="personalinfo">
-			Project by <a href="../"> Terence Broad </a> • <a href="../nnvis.html" target="_blank"> More Info </a> 
-		</div>
+
 
 
 
@@ -584,7 +588,7 @@
 				    visNewDigit = false;
 				    updateVisualisation();
 				    var div = document.getElementById('classification')
-				    div.innerHTML = "Classification : " + y +" ";
+				    div.innerHTML = "MNIST Digit Classification : " + y +" ";
 				  }
 				}
 
