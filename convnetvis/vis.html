@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Visualisation of Neural Network Topology</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+
+@import url(http://fonts.googleapis.com/css?family=Source+Sans+Pro:400);
+
+	body 
+	{
+		color: #000;
+		font-family: "Source Sans Pro", sans-serif;
+		font-size: 20px;
+		background-color: #fff;
+		margin: 0px;
+		overflow: hidden;
+	}
+
+	#info {
+		font-size:20px;
+		text-align:left;
+		color:#cccccc;
+		position: absolute;
+		top: 0px; width: 100%;
+		padding-top:5px;
+		padding-left:5px;
+	}
+	#personalinfo {
+		direction: rtl; 
+		float:right;
+		color:#cccccc;
+		position: absolute;
+		top: 0px; width: 100%;
+		padding-top:5px;
+		padding-right: 5px;
+	}
+	#classification
+	{
+		padding-top: 3px;
+	}
+	#subtext
+	{
+		color:#4B4B4C;
+		font-size: 16px;
+	}
+	a {
+		color: #374852;
+		text-decoration: none;
+	}
+	a:hover
+	{
+		color: #cccccc;
+	}
+    </style>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-37492810-4', 'Convnet Visualisation');
+  ga('send', 'pageview');
+
+</script>
+
+<script src="js/jquery-1.8.3.min.js"></script>
+<script src="build/vis.js"></script>
+<script src="build/util.js"></script>
+<script src="build/convnet.js"></script>
+
+
+<script src="js/image-helpers.js"></script>
+<script src="js/pica.js"></script>
+
+<script src="js/train.js"></script>
+
+<script src="mnist/mnist_labels.js"></script>
+ <script type="text/javascript">
+	classes_txt = ['0','1','2','3','4','5','6','7','8','9'];
+	var dataset_name = "mnist";
+	var num_batches = 2; // 20 training batches, 1 test
+	var test_batch = 1;
+	var num_samples_per_batch = 3000;
+	var image_dimension = 28;
+	var image_channels = 1;
+	var use_validation_data = true;
+	var random_flip = false;
+	var random_position = false;
+	var paused = false;
+	var step_num = 0;
+	var visNewDigit = true;
+	var lastDigit = 0;
+ 	var data_img_elts = new Array(num_batches);
+	var img_data = new Array(num_batches);
+	var loaded = new Array(num_batches);
+	var loaded_train_batches = [];
+	var layer_defs, net, trainer;
+	layer_defs = [];
+	layer_defs.push({type:'input', out_sx:24, out_sy:24, out_depth:1});
+	layer_defs.push({type:'conv', sx:5, filters:8, stride:1, pad:2, activation:'relu'});
+	layer_defs.push({type:'pool', sx:2, stride:2});
+	layer_defs.push({type:'conv', sx:5, filters:16, stride:1, pad:2, activation:'relu'});
+	layer_defs.push({type:'pool', sx:3, stride:3});
+	layer_defs.push({type:'softmax', num_classes:10});
+
+	net = new convnetjs.Net();
+	net.makeLayers(layer_defs);
+	load_pretrained();
+
+	trainer = new convnetjs.SGDTrainer(net, {method:'adadelta', batch_size:20, l2_decay:0.001});
+
+</script> 
+
+	</head>
+
+	<body>
+		<div id="container"></div>
+		<div id="info">
+			Topological Visualisation of a Convolutional Neural Network
+			<br>
+			<div id = "classification">MNIST Digit Classification : </div>
+			<div id ="subtext">	Press spacebar for new example.</div>
+		</div>
+		<div id ="personalinfo">
+			Project by <a href="../"> Terence Broad </a> • <a href="../nnvis.html" target="_blank"> More Info </a> 
+		</div>
+
+
+
+		<script src="three/three.min.js"></script>
+		<script src="three/OrbitControls.js"></script>
+		<script src="three/stats.min.js"></script>
+
+		<script>
+
+			//if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+			window.addEventListener("keypress", checkKeyPressed, false);
+			//var stats;
+
+			var camera, controls, scene, renderer;
+
+			var geometry, group, lines;
+
+			var mouseX = 0, mouseY = 0;
+
+			var targetRotation = 0;
+			var targetRotationOnMouseDown = 0;
+
+			var numLayers = 0;
+			var layerLookup = [];
+			var layerLookupInv = [];
+			var layerPosArr = [];
+
+			var isLoaded = false;
+			var running = false;
+			var paused = false; 
+			//var treeThreshold = 0.061;
+			var treeThreshold = 0.3;
+			var mouseXOnMouseDown = 0;
+			var x;
+			var multiInputs = true;
+
+			init();
+			animate();
+
+			function init() {
+
+				scene = new THREE.Scene();
+				//scene.fog = new THREE.FogExp2( 0x101928, 0.0002 );//080E14
+				scene.fog = new THREE.FogExp2( 0x121519, 0.0002 );
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setClearColor( scene.fog.color );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight);
+
+				var container = document.getElementById( 'container' );
+				container.appendChild( renderer.domElement );
+
+				// world
+
+				for(var i = 0; i < net.layers.length; i++)
+				{
+				  if(net.layers[i] instanceof convnetjs.ConvLayer || net.layers[i] instanceof convnetjs.FullyConnLayer || net.layers[i] instanceof convnetjs.InputLayer || net.layers[i] instanceof convnetjs.PoolLayer) 
+				  {
+				    layerLookupInv.push(numLayers);
+				    numLayers++;
+				    layerLookup.push(i);
+				    
+				  } 
+				  else { layerLookupInv.push(numLayers); }
+				}
+				layerPosArr = [numLayers];
+
+
+				camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 1000 );
+				camera.position.z = -numLayers*45;
+				camera.position.y = numLayers*35;
+				camera.position.x = -numLayers*45;
+
+				controls = new THREE.OrbitControls( camera, renderer.domElement );
+
+				controls.enableDamping = true;
+				controls.dampingFactor = 0.25;
+				controls.enableZoom = true;
+
+				var bi = Math.floor(Math.random()*loaded_train_batches.length);
+				var b = loaded_train_batches[bi];
+				if(img_data[b] != undefined) {updateNet();}
+				initPosArray();
+				scene.add( group );
+
+				//
+
+				// stats = new Stats();
+				// stats.domElement.style.position = 'absolute';
+				// stats.domElement.style.top = '0px';
+				// stats.domElement.style.zIndex = 100;
+				// container.appendChild( stats.domElement );
+
+				//
+
+				window.addEventListener( 'resize', onWindowResize, false );
+
+			}
+
+			function initPosArray()
+			{
+
+			var geometry = new THREE.BoxGeometry( 1, 1, 1 );
+			var meshes = [];
+			var L1 = net.layers[1];
+
+			group = new THREE.Group();
+
+			for(var i = 0; i < numLayers; i++)
+			{
+			  var depth = net.layers[layerLookup[i]].out_depth;  
+			  var L = net.layers[layerLookup[i]];
+			  var A = net.layers[layerLookup[i]].A;
+
+			  if(i > 0 && (A instanceof convnetjs.ConvLayer ))//|| A instanceof convnetjs.FullyConnLayer))
+			  {
+			    A = net.layers[layerLookup[i+1]].A;
+			  }
+
+			  var sx = A.sx;
+			  var sy = A.sy;
+			  layerPosArr[i] = [depth];
+
+			  for(var j = 0; j < depth; j++)
+			  {
+
+			    layerPosArr[i][j] = [sx*sy];
+
+			    for(var k = 0; k < sy; k++)
+			    {
+			      for(var l = 0; l < sx; l++)
+			      {
+			       var material = new THREE.MeshBasicMaterial( { color: 0xff0000} );
+
+			        if(A.w != undefined)
+			        {
+			          var al = A.w[((sx*k )+ l)*A.depth + j]; 
+			          if(i === numLayers-1){al = (al*0.075) +1;}//A hack cos json doesn't want to play nice with softmax
+			          var col = interpolateColor(al);
+			          material.color =  new THREE.Color( col, col , col);
+			        }
+			       
+
+			      
+			        if(i===0 && multiInputs)
+			        {
+			          for(var dd = 0; dd < L1.out_depth; dd++)
+			          {
+			            var mesh  = new THREE.Mesh( geometry, material );
+			            var pos = getPos(numLayers,i, L1.out_depth ,dd,L.out_sx,l,L.out_sy,k,net.layers[layerLookup[i]]);
+			            //layerPosArr[i][j][l*sy + sx] = pos;
+			            mesh.position.x = pos.x;
+			            mesh.position.y = pos.y;
+			            mesh.position.z = pos.z;
+
+			            mesh.updateMatrix();
+			            group.add(mesh);
+			          }
+			        }
+			        else
+			        {
+			          var mesh  = new THREE.Mesh( geometry, material );
+			          var pos = getPos(numLayers,i,depth,j,L.out_sx,l,L.out_sy,k,net.layers[layerLookup[i]]);
+			          layerPosArr[i][j][l*sy + sx] = pos;
+			          mesh.position.x = pos.x;
+			          mesh.position.y = pos.y;
+			          mesh.position.z = pos.z;
+
+			          mesh.updateMatrix();
+			          group.add(mesh);	          
+			        }
+			        scene.add(group);
+			      }
+			    }
+			  }        
+			}
+			}
+
+			function drawLines()
+			{
+			lines = new THREE.Group();
+			var depth = net.layers[net.layers.length-1].out_depth;
+			var A = net.layers[net.layers.length-1].A;
+			var high = 0;
+			var classification = 0;
+			for(var i = 0; i < depth; i++)
+			{
+			  var val = A.w[i];
+			  if(val > high) {high = val; classification = i;}
+			}
+
+			console.log("classification - " +classification+ " value - " +high+"");
+
+			var activIndex = new nodeIndex(net.layers.length-1,classification,0,0);
+			treeSearch(activIndex)
+
+			scene.add(lines);
+			}
+
+			function treeSearch(index)
+			{
+			var L = net.layers[index.l];
+			//console.log("tree search activatied");
+			switch(L.layer_type)
+			{
+			  case 'softmax':
+			  //console.log("softmax activated");
+			  var activIndex = index;
+			  activIndex.l = index.l -1;
+			  treeSearch(activIndex);
+			  break;
+			  case 'relu':
+			  //console.log("something went wrong, tree search for relu has been activated.");
+			  var activIndex = index;
+			  activIndex.l = index.l -1;
+			  treeSearch(activIndex);
+			  break;
+			  case 'conv':
+			  //console.log("conv activated");
+			  treeSearchConv(index,1);
+			  break;
+			  case 'fc':
+			  //console.log("full connected activated");
+			  treeSearchFC(index);
+			  break;
+			  case 'pool':
+			  //console.log("pool layer activated");
+			  treeSearchPool(index);
+			  break;
+			  case 'input':
+			  //console.log("something went wrong, tree search for input has been activated.");
+			  break;
+			  default :
+			  // console.log("something went wrong, tree search for an unrecognised layer type has been activated.");
+			  break;
+			}
+			}
+
+			function treeSearchFC(index)
+			{
+				
+				var L = net.layers[index.l];
+				var Lin = net.layers[index.l-1];
+				var activation = 0;
+				for(var d=0;d<L.in_depth;d++)
+				{
+				  for(var x = 0; x < L.in_sx; x++)
+				  {
+				    for(var y = 0; y < L.in_sy; y++)
+				    {
+				      if(Lin.layer_type = 'pool'){activation = L.VolofVolofActivations.getVal(0,0,index.d,0,0,((L.in_sx * y)+x)*L.in_depth+d);}
+				      else{activation = L.VolofVolofActivations.getVal(0,0,index.d,x,y,d)}
+				      if(activation > treeThreshold)
+				      {
+				        var newIndex = new nodeIndex(index.l-1,d,x,y);
+				        drawLine(index,newIndex,activation);
+				        treeSearch(newIndex);
+				      }
+				    }
+				  }
+				}
+			}
+
+			function treeSearchConv(index,gamma)
+			{
+				var L = net.layers[index.l];
+				var Lin = net.layers[index.l-1];
+				var inputsVol = L.VolofVolofActivations;
+
+				var activation = 0;
+				var f = L.filters[index.d];
+				var ox;
+				var oy;
+				var drawn = false;
+				for(var x = 0; x < L.sx; x++)
+				{
+				  for(var y = 0; y < L.sy; y++)
+				  {
+				    for(var d = 0; d < f.depth; d++)
+				    {
+				      activation = L.VolofVolofActivations.getVal(index.x,index.y,index.d,x,y,d);
+				      if(index.l-1 === 0){activation = activation*2;}
+				      if(activation > treeThreshold*gamma)
+				      {
+				        ox = (index.x - L.pad)+x;
+				        oy = (index.y - L.pad)+y;
+				        if(oy>=0 && oy<Lin.out_sy && ox>=0 && ox<Lin.out_sx) 
+				        {
+
+				          if(index.l-1 === 0 && multiInputs)
+				          {
+				            var newIndex = new nodeIndex(index.l-1,index.d,ox,oy);
+				            drawLine(index,newIndex,activation);
+				            treeSearch(newIndex);
+				          }
+				          else
+				          {
+				            var newIndex = new nodeIndex(index.l-1,d,ox,oy);
+				            drawLine(index,newIndex,activation);
+				            treeSearch(newIndex);
+				          } 
+				          drawn = true;
+				        }
+				      }
+				    }
+				  }
+				}
+				if(!drawn && gamma > 0.05) //--- Messy repeated code :( here to catch tree's that end abruptly
+				{
+					treeSearchConv(index,gamma*0.5);
+					// if(gamma <= 0.0001)
+					// {
+					// 	treeSearchConv(index,0);
+					// }
+				}
+			}
+
+			function treeSearchPool(index)
+			{
+				var L = net.layers[index.l];
+				var Lin = net.layers[index.l-2];
+				var n = ((L.out_sx * index.y)+index.x)*L.out_depth+index.d;
+				var newIndex = new nodeIndex(index.l-2,index.d,L.switchx[n],L.switchy[n]);
+				drawLine(index,newIndex,0.2);
+				treeSearch(newIndex);
+			}
+
+			function drawsLine(index1,index2,activation)
+			{
+				var material = new THREE.LineBasicMaterial({color: 0xffffff});
+				var col = interpolateColor(activation);
+
+				material.color =  new THREE.Color( col, col , col);
+
+				var lineGeo = new THREE.Geometry();
+
+				var L1 = net.layers[index1.l];
+				var L2 = net.layers[index2.l];
+				if(L2 instanceof convnetjs.InputLayer && multiInputs)
+				{
+				lineGeo.vertices.push( getPos(numLayers,layerLookupInv[index1.l],L1.out_depth,index1.d,L1.out_sx,index1.x,L1.out_sy,index1.y,L1),
+				                        getPos(numLayers,layerLookupInv[index2.l],L1.out_depth,index2.d,L2.out_sx,index2.x,L2.out_sy,index2.y,L2)
+				      );
+				}
+				else
+				{
+				lineGeo.vertices.push( getPos(numLayers,layerLookupInv[index1.l],L1.out_depth,index1.d,L1.out_sx,index1.x,L1.out_sy,index1.y,L1),
+				                        getPos(numLayers,layerLookupInv[index2.l],L2.out_depth,index2.d,L2.out_sx,index2.x,L2.out_sy,index2.y,L2)
+				      );
+				}
+				var line = new THREE.Line( lineGeo, material );
+				lines.add(line);
+			}
+
+
+			function drawLine(index1,index2,activation)
+			{
+				//var material = new THREE.LineBasicMaterial({color: 0xA0B1B2}); cccccc
+				//var material = new THREE.LineBasicMaterial({color: 0x374852});
+				var material = new THREE.LineBasicMaterial({color: 0xcccccc});
+				material.linewidth = 0.1;
+				var splineGeo = new THREE.Geometry();
+
+
+				var L1 = net.layers[index1.l];
+				var L2 = net.layers[index2.l];
+				if(L2 instanceof convnetjs.InputLayer && multiInputs)
+				{
+				  var curve = new THREE.CubicBezierCurve3(
+				    getPos(numLayers,layerLookupInv[index1.l],L1.out_depth,index1.d,L1.out_sx,index1.x,L1.out_sy,index1.y,L1),
+				    getPos(numLayers,layerLookupInv[index2.l]+0.5,L1.out_depth,index1.d,L1.out_sx,index1.x,L1.out_sy,index1.y,L1),
+				    getPos(numLayers,layerLookupInv[index1.l]-0.5,L1.out_depth,index2.d,L2.out_sx,index2.x,L2.out_sy,index2.y,L2),
+				    getPos(numLayers,layerLookupInv[index2.l],L1.out_depth,index2.d,L2.out_sx,index2.x,L2.out_sy,index2.y,L2)
+				  );
+
+				}
+				else
+				{
+				  var curve = new THREE.CubicBezierCurve3(
+				    getPos(numLayers,layerLookupInv[index1.l],L1.out_depth,index1.d,L1.out_sx,index1.x,L1.out_sy,index1.y,L1),
+				    getPos(numLayers,layerLookupInv[index2.l]+0.5,L1.out_depth,index1.d,L1.out_sx,index1.x,L1.out_sy,index1.y,L1),
+				    getPos(numLayers,layerLookupInv[index1.l]-0.5,L2.out_depth,index2.d,L2.out_sx,index2.x,L2.out_sy,index2.y,L2),
+				    getPos(numLayers,layerLookupInv[index2.l],L2.out_depth,index2.d,L2.out_sx,index2.x,L2.out_sy,index2.y,L2)
+				  );
+				}
+				splineGeo.vertices = curve.getPoints( 50 );
+				var line = new THREE.Line( splineGeo, material );
+				lines.add(line);
+			}
+
+			var nodeIndex = function(l, d, x, y) 
+			{
+				this.l = l;
+				this.d = d;
+				this.x = x;
+				this.y = y;
+			}
+
+			function getPos(layerNum, layerIdx, depthNum, depthIdx, sx, sxIdx, sy, syIdx, layer)
+			{
+				var z = interpolatePos(layerNum, layerIdx,-100);
+				var x = interpolatePos(depthNum,depthIdx,sx*-1.5) + interpolatePos(sx,sxIdx,-1);
+				var y = interpolatePos(sy,syIdx,-1);
+
+				if(layer instanceof convnetjs.PoolLayer || layer instanceof convnetjs.FullyConnLayer)
+				{
+				  x = interpolatePos(depthNum,depthIdx,sx*-3) + interpolatePos(sx,sxIdx,-1);
+				}
+				return new THREE.Vector3(x,y,z);
+			}
+
+			function interpolatePos(range, index, size)
+			{
+				return (index*size) - (((range-1)*size)/2);
+			}
+
+			function interpolateColor(c)
+			{
+				var v = c+0.5;
+				if(v < 0){v = 0;}
+				if (v > 1){v = 1;}
+				return (v);
+			}
+
+			function updateNet()
+			{
+				if(!paused && loaded[0])
+				{
+				var sample = sample_training_instance();
+
+				x = sample.x;
+				var y = sample.label;
+				if(sample.isval) 
+				{
+				  // use x to build our estimate of validation error
+				  net.forward(x);
+				  var yhat = net.getPrediction();
+				  var val_acc = yhat === y ? 1.0 : 0.0;
+				  //valAccWindow.add(val_acc);
+				  return; // get out
+				}
+				var stats = trainer.train(x, y);
+				var lossx = stats.cost_loss;
+				var lossw = stats.l2_decay_loss;
+				var yhat = net.getPrediction();
+				var train_acc = yhat === y ? 1.0 : 0.0;
+
+				if(step_num === 0) 
+				{
+				  visNewDigit = true;
+				  if(net.getPrediction() === y)
+				  {
+				    running = true;
+				    visNewDigit = false;
+				    updateVisualisation();
+				    var div = document.getElementById('classification')
+				    div.innerHTML = "Classification : " + y +" ";
+				  }
+				}
+
+				if(visNewDigit) 
+				{
+				  if(net.getPrediction() === y && y != lastDigit)
+				  {
+				    running = true;
+				    visNewDigit = false;
+				    updateVisualisation();
+				    lastDigit = y;
+				    var div = document.getElementById('classification')
+				    div.innerHTML = "MNIST Digit Classification : " + y +" ";
+
+				  }
+				}
+				step_num++;
+				console.log("input - "+y+" prediction - "+net.getPrediction()+"");
+				}
+			}
+
+			function updateVisualisation()
+			{
+				scene.remove(group);
+				scene.remove(lines);
+				initPosArray();
+				drawLines();
+				scene.add(group);
+				scene.add(lines);
+			}
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+
+				controls.update(); // required if controls.enableDamping = true, or if controls.autoRotate = true
+
+				//stats.update();
+
+				render();
+
+			}
+
+			function render() {
+
+				renderer.render( scene, camera );
+
+			}
+
+			function checkKeyPressed(e) 
+			{
+				if (e.charCode == "32") 
+				{
+					visNewDigit = true;
+				}
+			}
+
+		</script>
+
+	</body>
+</html>
